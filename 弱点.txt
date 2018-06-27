@@ -1,0 +1,950 @@
+一 逻辑卷的创建
+
+successfully :成功
+
+1. 直接创建卷组
+  命令格式: vgcreate  卷组名     分区路径
+
+[root@server0 ~]# vgcreate myvg /dev/vdc[1-2]
+[root@server0 ~]# vgs  #显示卷组的信息
+[root@server0 ~]# pvs  #显示物理卷的信息
+
+2.创建逻辑卷
+  命令格式: lvcreate  -L 大小    -n  逻辑卷名字      卷组名
+
+[root@server0 ~]# lvcreate -L 16G  -n  vo  myvg
+[root@server0 ~]# vgs
+[root@server0 ~]# lvs
+
+3.查看使用逻辑卷
+[root@server0 ~]# mkfs.ext4  /dev/myvg/vo
+[root@server0 ~]# mkdir  /mylv
+[root@server0 ~]# vim  /etc/fstab 
+/dev/myvg/vo   /mylv   ext4   defaults   0   0
+
+[root@server0 ~]# mount  -a
+
+[root@server0 ~]# df  -h
+
+#####################################################
+扩展逻辑卷
+
+一  卷组有足够的剩余空间
+
+1.直接扩展逻辑卷空间
+[root@server0 ~]# lvextend -L 19G /dev/myvg/vo 
+[root@server0 ~]# lvs
+
+2.文件系统的扩展
+  resize2fs :针对ext4文件系统
+  xfs_growfs :针对xfs文件系统
+
+[root@server0 ~]# blkid /dev/myvg/vo
+[root@server0 ~]# resize2fs  /dev/myvg/vo 
+[root@server0 ~]# df -h
+
+二  卷组没有足够的剩余空间
+
+1.扩展卷组
+[root@server0 ~]# vgextend myvg /dev/vdc3
+[root@server0 ~]# vgs
+
+2.直接扩展逻辑卷空间
+[root@server0 ~]# lvextend -L 25G /dev/myvg/vo 
+[root@server0 ~]# lvs
+[root@server0 ~]# vgs
+
+3.文件系统的扩展
+[root@server0 ~]# blkid /dev/myvg/vo
+[root@server0 ~]# resize2fs  /dev/myvg/vo 
+[root@server0 ~]# df  -h
+
+服务协议：
+         http:超文本传输协议                默认的端口：80
+         https：安全的超文本传输协议   默认的端口：443
+         ftp:文件传输协议                   默认的端口：21
+         tftp：简单的文件传输协议     默认的端口：69
+         telnet：远程管理协议          默认的端口：23
+         DNS：域名解析协议             默认的端口：53
+         smtp：用户发邮件协议        默认的端口：25
+         pop3：用户收邮件协议        默认的端口：110
+         snmp：网络管理协议           默认的端口：161
+
+
+防火墙策略的永久设置
+
+– 永久(permanent)
+虚拟机Server0
+# firewall-cmd --reload      #重新加载防火墙所有配置
+# firewall-cmd --zone=public --list-all
+
+# firewall-cmd --permanent --zone=public --add-service=http
+# firewall-cmd --zone=public --list-all 
+
+# firewall-cmd --reload      #重新加载防火墙所有配置
+# firewall-cmd --zone=public --list-all 
+
+
+#######################################################
+源IP地址的添加
+
+虚拟机Server0   
+# firewall-cmd --zone=block --add-source=172.25.0.10
+# firewall-cmd --zone=block --list-all 
+
+虚拟机desktop0 
+# firefox  172.25.0.11    #不可以访问
+# ping   172.25.0.11      #不可以访问
+
+真机：
+# firefox   172.25.0.11   #可以访问
+# ping   172.25.0.11      #可以访问
+
+#####################################################
+防火墙设置方式：
+
+严格：默认区域设置为drop区域,允许的放入trusted区域
+
+宽松：默认区域设置为trusted区域，拒绝的单独放入drop区域
+
+####################################################
+防火墙的端口转发：
+
+  端口：利用编号，标识一个服务或程序
+
+ 客户端访问172.25.0.11:5423服务端将其请求转发给本地的80端口
+
+虚拟机Server0
+[root@server0 ~]# firewall-cmd --reload 
+虚拟机desktop0
+[root@desktop0 ~]# firefox 172.25.0.11:5423
+
+虚拟机Server0
+# firewall-cmd --permanent --zone=public  
+--add-forward-port=port=5423:proto=tcp:toport=80
+
+# firewall-cmd --reload 
+# firewall-cmd --zone=public --list-all 
+
+虚拟机desktop0
+[root@desktop0 ~]# firefox 172.25.0.11:5423
+
+
+
+
+####################################################
+Samba服务基础，配置SMB共享（跨平台的共享：Windows 与 Linux）
+
+• Samba 软件项目
+– 用途:为客户机提供共享使用的文件夹
+– 协议:SMB(TCP 139)、CIFS(TCP 445)
+
+• 所需软件包:samba
+• 系统服务:smb
+
+
+
+管理共享账号
+• Samba用户 —— 专用来访问共享文件夹的用户
+– 采用独立设置的密码
+– 但需要提前建立同名的系统用户(可以不设密码)
+
+• 使用 pdbedit 管理工具
+– 添加用户:pdbedit -a 用户名
+– 查询用户:pdbedit -L [用户名]
+– 删除用户:pdbedit -x 用户名
+
+
+• 修改 /etc/samba/smb.conf
+
+[自定共享名]
+path = 文件夹绝对路径
+; public = no|yes //默认no
+; browseable = yes|no //默认yes
+; read only = yes|no //默认yes
+; write list = 用户1 .. .. //默认无
+; valid users = 用户1 .. .. //默认任何用户
+; hosts allow = 客户机地址 .. ..
+; hosts deny = 客户机地址 .. ..
+
+服务端虚拟机Server0：
+ 1.安装samba软件
+ 2.创建Samba共享帐号
+[root@server0 ~]# useradd harry
+[root@server0 ~]# useradd kenji
+[root@server0 ~]# useradd chihiro
+[root@server0 ~]# pdbedit -a harry     #添加为Samba帐号
+[root@server0 ~]# pdbedit -a kenji     #添加为Samba帐号
+[root@server0 ~]# pdbedit -a chihiro   #添加为Samba帐号
+
+[root@server0 ~]# pdbedit -L           #查看Samba帐号 
+
+3.创建共享目录
+[root@server0 ~]# mkdir /common
+[root@server0 ~]# echo 123 > /common/1.txt
+
+4.修改配置文件/etc/samba/smb.conf
+
+ 补充vim 命令模式：/workgroup   #全文查找workgroup 按n跳转
+                              按G可以直接到全文的最后 ,建议再文件最后加入内容        
+
+    workgroup = STAFF        #设置工作组
+
+	[common]                 #共享名
+	path  =  /common         #共享实际路径
+
+5.重起smb服务,设置smb服务为开机自启动
+
+6.修改SELinux策略，布尔值（功能的开关）
+ – 需要加 -P 选项才能实现永久设置
+ 查看布尔值
+[root@server0 ~]# getsebool -a | grep samba
+ 修改布尔值
+[root@server0 ~]# setsebool samba_export_all_ro on
+[root@server0 ~]# getsebool -a | grep samba
+
+客户端虚拟机Desktop0：
+1. 安装客户端软件samba-client
+2. 利用命令访问
+[root@desktop0 ~]# smbclient -L 172.25.0.11
+Enter root's password: 
+
+[root@desktop0 ~]# smbclient -U harry //172.25.0.11/common
+Enter harry's password: 
+Domain=[STAFF] OS=[Unix] Server=[Samba 4.1.1]
+smb: \> 
+
+#####################################################
+客户端访问服务端资源：
+1.防火墙
+2.服务本身的访问控制
+3.SELinux策略
+4.本地目录的权限（本地的权限）
+
+
+#####################################################
+更加科学的访问方式mount挂载
+客户端：虚拟机desktop0
+
+1.安装一个可以支持挂载smb资源的软件,所需软件包:cifs-utils
+# yum -y install cifs-utils
+# mkdir /mnt/test
+# mount -o user=harry,pass=123 //172.25.0.11/common /mnt/test
+
+# ls /mnt/test
+# df -h    #查看挂载情况
+ 
+2.开机自动挂载/etc/fstab
+
+ _netdev:声明网络设备
+       再开机启动时，首先开启网络服务后，再进行挂载本设备
+
+//172.25.0.11/common  /mnt/test    cifs defaults,user=harry,pass=123,_netdev 0 0
+
+[root@desktop0 ~]# umount /mnt/test/   #卸载设备
+[root@desktop0 ~]# df -h
+[root@desktop0 ~]# mount -a   #验证是否书写正确，进行挂载
+[root@desktop0 ~]# df -h
+
+######################################################
+读写的Samba共享
+
+虚拟机Server0:
+1.创建共享目录
+[root@server0 ~]# mkdir /devops
+[root@server0 ~]# echo redhat > /devops/a.txt
+
+2.修改/etc/samba/smb.conf
+
+[devops]
+path = /devops
+write list = chihiro
+
+3.重起smb服务
+
+4.修改SELinux策略
+[root@server0 ~]# getsebool -a | grep samba
+[root@server0 ~]# setsebool samba_export_all_rw on
+[root@server0 ~]# getsebool -a | grep samba
+
+5.修改本地权限
+[root@server0 ~]# setfacl -m  u:chihiro:rwx /devops/
+[root@server0 ~]# getfacl /devops/
+
+虚拟机Desktop0：
+
+ No such file or directory:没找到文件或目录
+
+1.开机自动挂载：
+
+//172.25.0.11/devops /mnt/nsd  cifs defaults,user=chihiro,pass=123,_netdev 0 0
+
+2.利用 mount  -a 进行测试挂载
+
+####################################################
+
+NFS共享概述 (Linux与Linux)
+• Network File System,网络文件系统
+– 用途:为客户机提供共享使用的文件夹
+– 协议:NFS(TCP/UDP 2049)、RPC(TCP/UDP 111)
+
+• 所需软件包:nfs-utils
+• 系统服务:nfs-server
+• 修改 /etc/exports
+– 文件夹路径    客户机地址(权限)
+
+ 只读 的NFS共享
+虚拟机Server0：
+1.安装nfs-utils包
+2.创建共享目录
+[root@server0 ~]# mkdir /public
+[root@server0 ~]# echo 123 > /public/123.txt
+
+3.修改配置文件/etc/exports
+/public         *(ro)
+共享路径                所有人(只读访问)
+
+4.重起nfs-server服务
+[root@server0 ~]# systemctl restart nfs-server
+[root@server0 ~]# systemctl enable nfs-server
+
+客户端访问：虚拟机Desktop0
+
+  does not exist:不存在
+
+[root@desktop0 /]# mkdir /mnt/nfsmount
+[root@desktop0 /]# vim /etc/fstab
+
+172.25.0.11:/public /mnt/nfsmount nfs defaults,_netdev 0 0
+
+[root@desktop0 /]# mount -a
+[root@desktop0 /]# df -h
+
+#####################################################
+
+
+iSCSI网络磁盘
+
+虚拟机Server0
+一、划分一个分区5G
+[root@server0 ~]# lsblk 
+[root@server0 ~]# fdisk /dev/vdb
+ n新建分区--->默认主分区回车 --->默认第一主分区回车--->起始回车--->+5G
+
+[root@server0 ~]# lsblk 
+[root@server0 ~]# ls /dev/vdb1
+
+• Internet SCSI,网际SCSI接口
+– 一种基于C/S架构的虚拟磁盘技术
+– 服务器提供磁盘空间,客户机连接并当成本地磁盘使用
+
+
+• backstore,后端存储
+– 对应到服务端提供实际存储空间的设备,需要起一个
+管理名称
+
+• target,磁盘组
+– 是客户端的访问目标,作为一个框架,由多个lun组成
+
+• lun,逻辑单元
+– 每一个lun需要关联到某一个后端存储设备,在客户端
+会视为一块虚拟硬盘
+
+二、构建iSCSI共享存储服务端
+虚拟机Server0：
+1.安装一个服务端软件targetcli
+[root@server0 ~]# yum -y install targetcli
+
+2.运行targetcli命令进行配置
+[root@server0 ~]# targetcli 
+
+---建立后端存储,为后端存储命名为nsd
+
+/> backstores/block create nsd /dev/vdb1
+Created block storage object nsd using /dev/vdb1.
+
+/> ls
+
+---建立target磁盘组（建立一个箱子）
+• ISCSI Qualified Name 名称规范
+– iqn.yyyy-mm.倒序域名:自定义标识
+– 用来识别 target 磁盘组,也用来识别客户机身份
+
+/> iscsi/ create  iqn.2018-05.example.com:server
+
+/> ls
+
+---lun需要关联(将后端存储放入箱子中)
+/> iscsi/iqn.2018-05.example.com:server/tpg1/luns create /
+  backstores/block/nsd 
+
+/> ls
+
+---ACL访问控制, 客户端声称的名字
+/> iscsi/iqn.2018-05.example.com:server/tpg1/acls create 
+  iqn.2018-05.example.com:abc
+
+/> ls
+
+---启用IP地址与端口
+/> iscsi/iqn.2018-05.example.com:server/tpg1/portals  
+  create 172.25.0.11
+
+/> ls
+
+/> exit   #保存并退出
+
+
+3.重起服务target，设置开机自启动
+[root@server0 ~]# systemctl restart target
+[root@server0 ~]# systemctl enable target
+
+客户端：访问服务端共享存储
+虚拟机Desktop:
+1.安装一个客户端软件iscsi-initiator-utils
+[root@desktop0 ~]# yum repolist  #产生缓存
+[root@desktop0 ~]# yum -y install iscsi(tab)
+
+2.修改配置文件/etc/iscsi/initiatorname.iscsi
+  #指定客户端声称的名字
+[root@desktop0 ~]# vim /etc/iscsi/initiatorname.iscsi 
+InitiatorName=iqn.2018-05.example.com:abc
+
+3.重起iscsid服务,该服务只是刷新客户端iqn名称
+[root@desktop0 ~]# systemctl restart iscsid
+Warning: Unit file of iscsid.service changed on disk, 'systemctl daemon-reload' recommended.
+[root@desktop0 ~]# systemctl daemon-reload
+[root@desktop0 ~]# systemctl restart iscsid
+
+4.发现服务端共享存储,  Ctrl 加  - 号 放小字体   Ctrl shift 加 + 号
+[root@room9pc01 ~]# man iscsiadm  #按大写的G到最后
+
+[root@desktop0 ~]# iscsiadm --mode discoverydb --type sendtargets --portal 172.25.0.11 --discover
+
+172.25.0.11:3260,1 iqn.2018-05.example.com:server
+
+5.重起iscsi加载共享存
+[root@desktop0 ~]# lsblk 
+[root@desktop0 ~]# systemctl restart iscsi
+[root@desktop0 ~]# systemctl enable iscsi
+[root@desktop0 ~]# lsblk  
+NAME   MAJ:MIN RM SIZE RO TYPE MOUNTPOINT
+sda      8:0    0   5G  0 disk 
+
+######################################################
+
+
+数据库管理
+
+  数据库:存放数据的仓库
+  
+   数据库中有很多的库，再库里有很多的表格
+   表字段（表头）与表记录（每一个记录）
+
+
+虚拟机Server0
+部署mariadb数据库服务器
+1.安装mariadb-server数据主程序
+[root@server0 ~]# yum -y  install mariadb-server
+
+2.启动mariadb服务，设置为开机自启动
+[root@server0 ~]# systemctl restart mariadb
+[root@server0 ~]# systemctl enable mariadb
+
+    mariadb与mysql数据库，默认端口为3306
+
+3.进入mariadb数据库,默认情况下数据库是没有密码的
+
+[root@server0 ~]# mysql
+
+MariaDB [(none)]> show  databases;   #查看所有库
+
+MariaDB [(none)]> create  database  nsd1804;  #创建nsd1804库
+MariaDB [(none)]> show  databases;   #查看所有库
+
+MariaDB [(none)]> drop  database  nsd1804;  #删除nsd1804库
+MariaDB [(none)]> show databases;
+
+MariaDB [(none)]> create  database  nsd;  #创建nsd库
+MariaDB [(none)]> show  databases;
+MariaDB [(none)]> exit
+Bye
+
+4.在Linux命令行mariadb数据库,设置数据库管理员密码
+
+ 数据库管理员：名root，对mariadb数据库最高权限的用户，信息mysql库
+
+ 系统管理员：名root，对Linux系统最高权限的用户，信息/etc/passwd
+
+• 为数据库账号修改密码
+– mysqladmin [-u用户名] [-p[旧密码]] password '新密码'
+
+[root@server0 ~]# mysqladmin -u root password '123'
+交互式
+[root@server0 ~]# mysql -u root -p 
+Enter password:
+ 
+非交互式
+[root@server0 ~]# mysql -u root -p123 
+
+5.MariaDB 主配置文件/etc/my.cnf
+• 禁止监听,只服务于本机
+[root@server0 ~]# vim /etc/my.cnf
+[mysqld]
+skip-networking   //跳过网络监听
+.. ..
+[root@server0 ~]# systemctl restart mariadb
+
+6.表的操作： 增(insert)    删(delete)     改(update)        查(select)
+[root@server0 ~]# mysql -u root -p123
+MariaDB [(none)]> use  mysql;     #进入mysql库
+
+MariaDB [mysql]> show tables;     #查看所有表格
+
+MariaDB [mysql]> desc user;       #查看表结构
+
+MariaDB [mysql]> select user,host,password from user;
+
+MariaDB [mysql]> select user,password from user;
+
+MariaDB [(none)]> select user,password from mysql.user;
+
+  select   表字段1,表字段2     from   库名.表名;
+
+7.恢复库中的数据
+[root@server0 ~]# wget http://classroom.example.com/pub/materials/users.sql
+
+[root@server0 ~]# mysql -u root -p123 nsd < users.sql
+
+[root@server0 ~]# mysql -u root -p123 
+
+MariaDB [(none)]> use nsd;   #进入nsd库
+
+MariaDB [nsd]> show tables;  #查看所有表格
+
+MariaDB [nsd]> select * from base;   #查看base表中所有字段
+
+MariaDB [nsd]> select * from location;
+
+8.数据库表查询，有条件查询
+MariaDB [nsd]> select * from base where 表字段='值'; 
+
+MariaDB [nsd]> use nsd
+
+MariaDB [nsd]> select * from base where name='Barbara';
+
+MariaDB [nsd]> select * from base where name='tom';
+
+MariaDB [nsd]> select * from base where password='123';
+
+ 多个条件之间   and（同时满足）  与  or （或者满足其中一个即可）
+
+MariaDB [nsd]> select * from base where password='123'  or  password='456';
+MariaDB [nsd]> select * from base where name='tom'      and  password='123';
+
+9.数据库的授权
+– 除了root用户,此数据库nsd只能被用户lisi查询,此用户的密码为123
+
+– GRANT 权限列表  ON 数据库名.表名  TO 用户名@
+客户机地址 IDENTIFIED BY '密码';
+
+ grant select  on  nsd.*  to  lisi@localhost identified by  '123';
+
+  当lisi从localhost本地登陆数据库输入密码123，将会获得nsd库中所有表的查询权限
+
+MariaDB [nsd]> grant select  on  nsd.*  to  lisi@localhost identified by  '123';
+
+查看表记录
+MariaDB [nsd]> select user,host,password from mysql.user where user='lisi';
+
+[root@server0 ~]# mysql -u lisi -p123  #测试lisi登陆
+
+#####################################################
+2. 在系统 server0 上使用数据库 nsd,并使用相
+应的 SQL 查询以回答下列问题:
+1)密码是 solicitous 的人的名字?
+[root@server0 ~]# mysql -u root -p123
+
+MariaDB [(none)]> use nsd;
+
+MariaDB [nsd]> select * from base;
+
+MariaDB [nsd]> select * from base where password='solicitous';
+
+MariaDB [nsd]> select name,password from base where password='solicitous';
+
+2)有多少人的姓名是 Barbara 同时居住在 Sunnyvale?
+
+MariaDB [nsd]> select  *  from  base,location 
+ where 
+ base.name='Barbara' and  location.city='Sunnyvale'      
+ and  base.id=location.id;
+
+MariaDB [nsd]> select  count(*)  from  base,location 
+ where 
+ base.name='Barbara'  and  location.city='Sunnyvale'       
+ and  base.id=location.id;
+
+MariaDB [nsd]> insert  base  values('6','Barbara','789');
+MariaDB [nsd]> select *  from  base;
+MariaDB [nsd]> insert  location  values('6','Sunnyvale');
+MariaDB [nsd]> select *  from  location;
+
+
+1. 禁止空密码root用户访问 mariadb 数据库
+
+MariaDB [(none)]> use mysql;
+
+> select user,host,password from user;
+ 
+> select user,host,password from user where password='';
+
+> delete from user  where password='';    #删除表记录
+
+> select user,host,password from user;
+
+> flush  privileges;    #刷新数据库user表信息；
+
+> exit
+
+######################################################
+
+
+Web通信基本概念
+• 基于 B/S (Browser/Server)架构的网页服务
+– 服务端提供网页
+– 浏览器下载并显示网页
+• Hyper Text Markup Language,超文本标记语言(html)
+• Hyper Text Transfer Protocol,超文本传输协议(http)
+
+• 软件包:httpd
+• 系统服务:httpd
+
+• 提供的默认配置
+– Listen:监听地址:端口(80)
+– ServerName:本站点注册的DNS名称(空缺)
+– DocumentRoot:网页根目录(/var/www/html)
+– DirectoryIndex:起始页/首页文件名(index.html)
+虚拟机Server0
+1.安装httpd软件包
+[root@server0 ~]# yum -y install httpd
+
+2.启动httpd服务
+[root@server0 ~]# systemctl  restart  httpd
+[root@server0 ~]# systemctl  enable  httpd
+
+3.书写一个页面文件
+   默认的网页文件路径：/var/www/html
+   默认的网页文件名：index.html
+[root@server0 ~]# cat /var/www/html/index.html
+My First Web
+
+######################################################
+二、修改配置文件/etc/httpd/conf/httpd.conf
+
+ 今日可用的域名     server0.example.com
+                www0.example.com
+                webapp0.example.com
+
+  IncludeOptional conf.d/*.conf     #调用配置文件
+
+
+ServerName:本站点注册的完整的域名
+
+1.修改配置文件/etc/httpd/conf/httpd.conf
+ (补充：vim末行模式  set  nu  开启行号)
+ (补充：vim命令模式  /ServerName  全文搜索ServerName 按n)
+
+  95行  ServerName server0.example.com:80
+
+2.重起httpd服务
+[root@server0 ~]# systemctl restart  httpd
+
+3.测试利用域名访问
+[root@server0 ~]# firefox server0.example.com
+
+#################################################
+ DocumentRoot:网页文件的根目录(/var/www/html)
+
+1.创建目录书写页面
+[root@server0 ~]# mkdir /var/www/myweb
+[root@server0 ~]# cat  /var/www/myweb/index.html
+ wo shi myweb
+2.修改配置文件/etc/httpd/conf/httpd.conf
+ (补充：vim末行模式  set  nu  开启行号)
+ (补充：vim命令模式  /DocumentRoot  全文搜索DocumentRoot 按n)
+
+119 DocumentRoot "/var/www/myweb"
+
+3.重起httpd服务
+[root@server0 ~]# systemctl restart  httpd
+
+4.测试利用域名访问
+[root@server0 ~]# firefox server0.example.com
+
+######################################################
+虚拟Web主机
+
+ 作用：让一台服务器，提供多个网站
+
+虚拟Web主机构建方式：
+
+     1.基于域名的区分方式
+     2.基于端口的区分方式
+     3.基于IP的区分方式
+
+虚拟Server0
+1.建立新的调用配置文件/etc/httpd/conf.d/nsd01.conf
+<VirtualHost  *:80>                  #在所有网卡启用80端口
+  ServerName   www0.example.com      #指定网站域名
+  DocumentRoot   /var/www/nsd01      #指定网页文件路径
+</VirtualHost>
+
+<VirtualHost  *:80>
+  ServerName   webapp0.example.com
+  DocumentRoot   /var/www/nsd02
+</VirtualHost>
+
+# mkdir  /var/www/nsd01   /var/www/nsd02
+# echo wo shi nsd01  >  /var/www/nsd01/index.html
+# echo wo shi nsd02  >  /var/www/nsd02/index.html
+# systemctl  restart  httpd
+
+
+ 注意：一旦启用虚拟Web主机功能，所有的站点都必须用虚拟Web主机来实现
+
+[root@server0 ~]# vim /etc/httpd/conf.d/nsd01.conf
+ ......
+<VirtualHost  *:80>
+  ServerName   server0.example.com
+  DocumentRoot   /var/www/myweb
+</VirtualHost>
+
+[root@server0 ~]# systemctl restart httpd
+
+######################################################
+Web的访问控制
+– 每个文件夹自动继承其父目录的ACL访问权限
+– 除非针对子目录有明确设置
+
+在 Web 网站 http://server0.example.com 的
+DocumentRoot 目录下创建一个名为 private 的子目录
+要求如下:
+虚拟机Server0
+# mkdir /var/www/myweb/private
+# echo wo shi private > /var/www/myweb/private/index.html
+ 
+[root@server0 ~]# cat /etc/httpd/conf.d/nsd02.conf
+<Directory "/var/www/myweb/private">
+    Require ip 172.25.0.11
+</Directory>
+[root@server0 ~]# systemctl restart httpd
+
+客户端虚拟机Desktop：访问测试
+[root@desktop0 ~]# firefox  server0.example.com/private
+网页报错信息
+Forbidden
+You don't have permission to access /private/ on this server.
+
+#####################################################
+1.防火墙
+2.服务访问控制
+3.SELinux
+4.本地目录的权限
+###################################################
+
+案例4:使用自定Web根目录
+调整 Web 站点 http://server0.example.com 的网页
+目录,要求如下:
+
+虚拟机Server0：
+1)新建目录 /webroot,作为此站点新的网页目录
+[root@server0 ~]# mkdir /webroot
+[root@server0 ~]# echo wo shi webroot > /webroot/index.html
+
+2)修改配置文件/etc/httpd/conf.d/nsd01.conf
+......
+<VirtualHost  *:80>
+  ServerName  server0.example.com
+  DocumentRoot  /webroot
+</VirtualHost>
+
+
+3)修改配置文件/etc/httpd/conf.d/nsd02.conf(访问控制)
+......
+<Directory  "/webroot">
+    Require all granted
+</Directory>
+           
+4)SELinux安全上下文（标签值）
+• 参照标准目录,重设新目录的属性
+– chcon [-R] --reference=模板目录    新目录
+[root@server0 ~]# ls -Zd /webroot/
+[root@server0 ~]# chcon -R  --reference=/var/www  /webroot/
+[root@server0 ~]# ls -Zd /webroot/
+
+5)重起服务
+[root@server0 ~]#  systemctl  restart  httpd
+
+客户端desktop:访问测试
+[root@server0 ~]# firefox server0.example.com
+
+######################################################
+部署动态网站
+
+
+静态网站的运行
+• 服务端的原始网页 = 浏览器访问到的网页
+– 由Web服务软件处理所有请求
+– 文本(txt/html)、图片(jpg/png)等静态资源
+– 静态网站不需要翻译
+
+
+动态网站的运行
+• 服务端的原始网页 ≠ 浏览器访问到的网页
+– 由Web服务软件接受请求,动态程序转后端模块处理
+– PHP网页、Python网页、JSP网页......
+– 动态网站需要其他程序翻译
+虚拟机Server0：
+
+为站点 webapp0.example.com 配置提供动态Web
+1.部署Python的页面
+[root@server0 ~]# vim /etc/httpd/conf.d/nsd01.conf
+ 查看webapp0.example.com的DocumentRoot路径
+  
+# cd /var/www/nsd02/
+# wget http://classroom.example.com/pub/materials/webinfo.wsgi
+
+2.方便用户访问,网页跳转（网页别名）
+[root@server0 /]# vim /etc/httpd/conf.d/nsd01.conf
+......
+<VirtualHost  *:80>
+  ServerName webapp0.example.com
+  DocumentRoot /var/www/nsd02
+  Alias   /    /var/www/nsd02/webinfo.wsgi
+
+   #当用户访问网页文件根目录时，将webinfo.wsgi呈现
+
+</VirtualHost>
+......
+[root@server0 /]# systemctl restart httpd
+
+[root@server0 /]# firefox webapp0.example.com
+
+3.翻译Python页面
+[root@server0 /]# yum -y install mod_wsgi
+[root@server0 /]# vim /etc/httpd/conf.d/nsd01.conf 
+<VirtualHost  *:80>
+  ServerName webapp0.example.com
+  DocumentRoot /var/www/nsd02
+  WsgiScriptAlias /  /var/www/nsd02/webinfo.wsgi
+
+</VirtualHost>
+[root@server0 /]#  systemctl restart httpd
+[root@server0 /]#  firefox webapp0.example.com
+
+  UNIX时间戳：自1970-1-1 0:0:0算起，到达当前时间所经历的秒数
+
+4.修改虚拟Web主机的端口
+[root@server0 /]# vim /etc/httpd/conf.d/nsd01.conf
+......
+Listen 8909
+<VirtualHost  *:8909>
+  ServerName webapp0.example.com
+  DocumentRoot /var/www/nsd02
+  WsgiScriptAlias /  /var/www/nsd02/webinfo.wsgi
+</VirtualHost>
+......
+
+5.修改SELinux开放的端口，-a添加   -t 类型   -p 协议
+# semanage port -l | grep http
+# semanage port -a -t  http_port_t  -p tcp 8909
+# semanage port -l | grep http  #查看是否添加成功
+# systemctl restart httpd
+
+[root@desktop0 ~]# firefox webapp0.example.com:8909
+
+#####################################################
+安全Web服务
+
+  https协议传输，安全的超文本传输协议  端口：443
+
+– 公钥:主要用来加密数据
+– 私钥:主要用来解密数据(与相应的公钥匹配)
+– 数字证书:证明拥有者的合法性/权威性(单位名称、
+有效期、公钥、颁发机构及签名、......)
+– Certificate Authority,数字证书授权中心:负责证书
+的申请/审核/颁发/鉴定/撤销等管理工作
+
+虚拟机Server0：
+1.部署网站证书（营业执照）
+[root@server0 /]# cd /etc/pki/tls/certs/
+[root@server0 certs]# wget http://classroom.example.com/pub/tls/certs/server0.crt
+[root@server0 certs]# ls
+
+2.部署数字证书授权中心信息（根证书）（公安局信息）
+[root@server0 /]# cd /etc/pki/tls/certs/
+[root@server0 certs]# wget http://classroom.example.com/pub/example-ca.crt
+[root@server0 certs]# ls
+
+3.部署私钥文件,用于解密数据
+[root@server0 certs]# cd /etc/pki/tls/private/
+[root@server0 private]# wget http://classroom.example.com/pub/tls/private/server0.key
+[root@server0 certs]# ls
+
+4.安装支持安全Web的软件
+[root@server0 /]# yum -y install mod_ssl
+
+5.修改配置文件
+[root@server0 /]# vim /etc/httpd/conf.d/ssl.conf
+  补充：vim末行模式下 输入 : set  nu 显示行号
+
+ 59 DocumentRoot "/var/www/myweb"
+ 60 ServerName www0.example.com:443
+
+指定网站证书
+100 SSLCertificateFile /etc/pki/tls/certs/server0.crt
+
+指定私钥文件
+107 SSLCertificateKeyFile /etc/pki/tls/private/server0.key
+
+指定根证书（数字授权中心信息）
+122 SSLCACertificateFile /etc/pki/tls/certs/example-c
+    a.crt
+
+6.重起 httpd 服务
+
+7.验证
+[root@desktop0 ~]# firefox https://www0.example.com
+
+######################################################
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
